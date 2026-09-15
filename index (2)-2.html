@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Flight Deck — Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E17; --panel:#121826; --panel-2:#1A2333; --line:#232D40;
+    --amber:#F5A623; --cyan:#3FDCEC; --cyan-dim:#256A72; --green:#5FD068;
+    --violet:#8B6FB3; --text:#E8EAED; --muted:#7C8798; --danger:#E85D5D;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; overscroll-behavior-y:none;}
+  body{padding-bottom:80px; min-height:100vh;}
+  .mono{font-family:'Space Mono',monospace;}
+  ::selection{background:var(--amber); color:#0A0E17;}
+  a{color:var(--cyan);}
+
+  header{position:sticky; top:0; z-index:20; background:linear-gradient(180deg,#0D1220 0%,#0A0E17 100%); border-bottom:1px solid var(--line); padding:14px 16px 12px;}
+  .strip-row{display:flex; justify-content:space-between; align-items:flex-start;}
+  .callsign{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:0.18em; color:var(--muted); text-transform:uppercase;}
+  .clock{font-family:'Space Mono',monospace; font-size:26px; font-weight:700; color:var(--amber); letter-spacing:0.02em; line-height:1;}
+  .datestr{font-size:11px; color:var(--muted); margin-top:2px; font-family:'Space Mono',monospace;}
+  .badges{display:flex; flex-direction:column; gap:6px; align-items:flex-end;}
+  .badge{display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:5px 11px; font-family:'Space Mono',monospace; font-size:12px; font-weight:700;}
+  .badge .lbl{color:var(--muted); font-weight:400; font-size:9.5px; text-transform:uppercase; letter-spacing:0.08em;}
+  .badge.streak{color:var(--green);}
+  .badge.rank{color:var(--amber);}
+
+  main{padding:18px 16px 24px; max-width:640px; margin:0 auto;}
+  .view{display:none; animation:fade .25s ease;}
+  .view.active{display:block;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+
+  h1.page-title{font-family:'Space Mono',monospace; font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); margin:0 0 4px;}
+  h2.page-sub{font-size:19px; font-weight:700; margin:0 0 14px; color:var(--text);}
+
+  .gauge-wrap{display:flex; align-items:center; gap:18px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:18px;}
+  .gauge-num{font-family:'Space Mono',monospace; font-size:15px; font-weight:700; fill:var(--amber);}
+  .gauge-label{font-size:13px; color:var(--muted); line-height:1.5;}
+  .gauge-label b{color:var(--text); display:block; font-size:14px; margin-bottom:2px;}
+
+  .quote-card{background:var(--panel-2); border-left:3px solid var(--amber); border-radius:8px; padding:10px 12px; font-size:12.5px; color:var(--muted); font-style:italic; margin-bottom:12px;}
+  .challenge-card{background:var(--panel); border:1px solid var(--violet); border-radius:10px; padding:12px 14px; margin-bottom:18px; display:flex; align-items:flex-start; gap:10px;}
+  .challenge-card .clabel{font-family:'Space Mono',monospace; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--violet); margin-bottom:3px;}
+  .challenge-card .ctext{font-size:13.5px;}
+  .challenge-card.done .ctext{opacity:0.45; text-decoration:line-through;}
+
+  .strip-list{display:flex; flex-direction:column;}
+  .fstrip{display:flex; align-items:center; gap:12px; padding:13px 4px; border-bottom:1px solid var(--line);}
+  .fstrip:last-child{border-bottom:none;}
+  .ftime{font-family:'Space Mono',monospace; font-size:12px; color:var(--muted); width:58px; flex-shrink:0;}
+  .ftag{width:4px; align-self:stretch; border-radius:3px; flex-shrink:0;}
+  .fbody{flex:1; min-width:0;}
+  .flabel{font-size:14.5px; font-weight:500; transition:color .15s, opacity .15s;}
+  .fsub{font-size:11px; color:var(--muted); margin-top:1px;}
+  .fcheck{width:26px; height:26px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; background:transparent; transition:all .15s;}
+  .fcheck.done{background:var(--green); border-color:var(--green);}
+  .fcheck svg{width:14px; height:14px; opacity:0; transition:opacity .1s;}
+  .fcheck.done svg{opacity:1;}
+  .fstrip.done .flabel{opacity:0.45; text-decoration:line-through;}
+
+  .timer-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:18px; text-align:center;}
+  .timer-display{font-family:'Space Mono',monospace; font-size:38px; font-weight:700; color:var(--cyan); margin:6px 0;}
+  .timer-presets{display:flex; gap:8px; justify-content:center; margin-bottom:10px;}
+  .preset-btn, .ctl-btn{background:var(--panel-2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:8px 12px; font-family:'Space Mono',monospace; font-size:12px; cursor:pointer;}
+  .preset-btn.active{background:var(--cyan); color:#0A0E17; border-color:var(--cyan);}
+  .timer-controls{display:flex; gap:8px; justify-content:center;}
+  .ctl-btn.primary{background:var(--cyan); color:#0A0E17; border-color:var(--cyan); font-weight:700;}
+
+  .pill-row{display:flex; gap:7px; margin-bottom:14px; overflow-x:auto; padding-bottom:2px;}
+  .pill-row::-webkit-scrollbar{display:none;}
+  .pill{flex-shrink:0; padding:8px 14px; border-radius:20px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-family:'Space Mono',monospace; font-size:11.5px; letter-spacing:0.03em; cursor:pointer; font-weight:700; white-space:nowrap; transition:all .15s;}
+  .pill.on{color:#0A0E17;}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px;}
+  .card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
+  .card-name{font-weight:700; font-size:15px;}
+  .card-idx{font-family:'Space Mono',monospace; font-size:11px; color:var(--muted);}
+  .bar-track{height:4px; border-radius:3px; background:var(--line); margin:10px 0 12px; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:3px; transition:width .3s;}
+  .task-row{display:flex; align-items:flex-start; gap:10px; padding:7px 0; cursor:pointer;}
+  .task-check{width:20px; height:20px; border-radius:5px; border:2px solid var(--line); flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; transition:all .15s;}
+  .task-check svg{width:12px; height:12px; opacity:0;}
+  .task-check.done svg{opacity:1;}
+  .task-text{font-size:13.5px; line-height:1.45; color:var(--text); transition:opacity .15s;}
+  .task-row.done .task-text{opacity:0.45; text-decoration:line-through;}
+  .unit-label{font-family:'Space Mono',monospace; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin:14px 0 4px; padding-top:8px; border-top:1px solid var(--line);}
+  .unit-label:first-of-type{border-top:none; margin-top:0; padding-top:0;}
+
+  details.guide{margin-top:10px; border-top:1px dashed var(--line); padding-top:8px;}
+  details.guide summary{cursor:pointer; font-size:12px; color:var(--cyan); font-family:'Space Mono',monospace; letter-spacing:0.03em;}
+  details.guide p{font-size:12.5px; color:var(--muted); line-height:1.55; margin:8px 0 4px;}
+  details.guide a{font-size:12px; display:block; margin-top:4px;}
+
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+  .stat-box{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px;}
+  .stat-num{font-family:'Space Mono',monospace; font-size:22px; font-weight:700; color:var(--amber);}
+  .stat-lbl{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px;}
+  .chart{display:flex; align-items:flex-end; gap:8px; height:100px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 8px; margin-bottom:18px;}
+  .bar-col{flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end;}
+  .bar{width:100%; max-width:26px; border-radius:4px 4px 0 0; background:var(--cyan); min-height:3px; transition:height .3s;}
+  .bar-day{font-size:10px; color:var(--muted); margin-top:6px; font-family:'Space Mono',monospace;}
+
+  .badge-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:18px;}
+  .badge-tile{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 6px; text-align:center;}
+  .badge-tile.unlocked{border-color:var(--amber);}
+  .badge-emoji{font-size:22px; opacity:0.25;}
+  .badge-tile.unlocked .badge-emoji{opacity:1;}
+  .badge-name{font-size:9px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:0.02em; font-family:'Space Mono',monospace;}
+  .badge-tile.unlocked .badge-name{color:var(--text);}
+
+  .book-card{display:flex; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px;}
+  .book-spine{width:6px; border-radius:4px; flex-shrink:0;}
+  .book-title{font-weight:700; font-size:14.5px;}
+  .book-author{font-size:12px; color:var(--muted); margin-top:1px;}
+  .status-pill{display:inline-block; font-family:'Space Mono',monospace; font-size:9.5px; text-transform:uppercase; letter-spacing:0.06em; padding:2px 8px; border-radius:10px; margin-top:6px; font-weight:700;}
+  .book-progress{margin-top:10px;}
+  input[type=range]{width:100%; accent-color:var(--cyan);}
+  .book-pct{font-family:'Space Mono',monospace; font-size:11px; color:var(--muted); text-align:right;}
+
+  .add-form{background:var(--panel-2); border:1px dashed var(--line); border-radius:12px; padding:12px; margin-top:6px; margin-bottom:16px;}
+  .add-form input, .add-form select{width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:9px 10px; font-size:13px; margin-bottom:8px; font-family:'Inter',sans-serif;}
+  .add-form button{width:100%; background:var(--amber); border:none; color:#0A0E17; font-weight:700; border-radius:8px; padding:10px; font-family:'Space Mono',monospace; font-size:12px; cursor:pointer; letter-spacing:0.04em;}
+  .suggest-chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;}
+  .chip{font-size:11.5px; background:var(--panel-2); border:1px solid var(--line); color:var(--muted); border-radius:14px; padding:5px 10px; cursor:pointer;}
+
+  .ach-card{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--green); border-radius:10px; padding:12px 14px; margin-bottom:10px;}
+  .ach-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .ach-title{font-weight:700; font-size:14px;}
+  .ach-cat{font-size:11px; color:var(--muted); margin-top:2px;}
+  .ach-note{font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4;}
+  .ach-del{background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:0 4px;}
+  .section-label{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin:20px 0 10px;}
+  .section-label:first-child{margin-top:0;}
+  .proj-list{font-size:13px; line-height:1.7; color:var(--text); padding-left:18px; margin:0;}
+
+  nav{position:fixed; bottom:0; left:0; right:0; z-index:30; background:#0D1220; border-top:1px solid var(--line); display:flex; padding:5px 2px calc(5px + env(safe-area-inset-bottom));}
+  .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; background:none; border:none; color:var(--muted); padding:7px 1px; cursor:pointer; font-family:'Space Mono',monospace; font-size:8.5px; text-transform:uppercase; letter-spacing:0.02em;}
+  .navbtn svg{width:18px; height:18px;}
+  .navbtn.active{color:var(--amber);}
+  .navbtn.active svg{stroke:var(--amber);}
+
+  .reset-link{display:block; text-align:center; font-size:11px; color:var(--muted); margin-top:22px; text-decoration:underline; cursor:pointer;}
+  .disclaimer{font-size:11px; color:var(--muted); line-height:1.5; background:var(--panel-2); border-radius:8px; padding:10px 12px; margin-bottom:16px;}
+
+  /* ===== EDIT PORTAL + DAILY TO-DO ===== */
+  .header-actions{display:flex;gap:6px;align-items:center;margin-top:2px;}
+  .icon-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .icon-btn:hover{color:var(--amber);border-color:var(--amber);}
+  .todo-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:18px;}
+  .todo-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;}
+  .todo-title{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+  .todo-count{font-family:'Space Mono',monospace;font-size:11px;color:var(--cyan);}
+  .todo-add{display:flex;gap:7px;margin-bottom:10px;}
+  .todo-add input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font-size:13px;}
+  .todo-add button,.portal-btn{background:var(--amber);border:none;color:#0A0E17;font-weight:700;border-radius:8px;padding:9px 12px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;}
+  .todo-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .todo-row:last-child{border-bottom:none;}
+  .todo-check{width:20px;height:20px;border-radius:5px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;}
+  .todo-check.done{background:var(--green);border-color:var(--green);}
+  .todo-text{font-size:13px;flex:1;min-width:0;word-break:break-word;}
+  .todo-row.done .todo-text{opacity:.45;text-decoration:line-through;}
+  .todo-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:3px 5px;}
+  .todo-empty{font-size:12px;color:var(--muted);padding:8px 0;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;display:none;align-items:flex-end;justify-content:center;padding:12px;}
+  .modal-backdrop.open{display:flex;}
+  .portal{width:min(720px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.45);}
+  .portal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;}
+  .portal-title{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);}
+  .portal-close{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;}
+  .portal-note{font-size:11.5px;color:var(--muted);line-height:1.5;background:var(--panel-2);border-radius:9px;padding:10px;margin-bottom:12px;}
+  .portal-section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px;}
+  .portal-section h3{font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;}
+  .portal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .portal-field{display:flex;flex-direction:column;gap:5px;margin-bottom:8px;}
+  .portal-field.full{grid-column:1/-1;}
+  .portal-field label{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;}
+  .portal-field input,.portal-field textarea,.portal-field select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font-size:12.5px;font-family:'Inter',sans-serif;}
+  .portal-field textarea{min-height:70px;resize:vertical;}
+  .portal-list-item{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;}
+  .portal-item-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:7px;}
+  .portal-item-id{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);}
+  .portal-mini-actions{display:flex;gap:6px;}
+  .portal-mini{background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:7px;padding:5px 8px;font-size:10px;cursor:pointer;}
+  .portal-mini.danger{color:var(--danger);}
+  .portal-actions{display:flex;gap:8px;margin-top:14px;}
+  .portal-actions .portal-btn.secondary{background:var(--panel-2);border:1px solid var(--line);color:var(--text);}
+  .portal-status{font-size:11px;color:var(--green);min-height:16px;margin-top:8px;}
+  @media(max-width:520px){.portal-grid{grid-template-columns:1fr}.portal-field.full{grid-column:auto}.todo-add button{padding-left:10px;padding-right:10px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="strip-row">
+    <div>
+      <div class="callsign">Self-Ed Flight Deck</div>
+      <div class="clock mono" id="clock">--:--</div>
+      <div class="datestr" id="datestr">Loading...</div>
+    </div>
+    <div class="badges">
+      <div class="header-actions">
+        <button class="icon-btn" id="openPortal" aria-label="Open Edit Portal" title="Edit Portal">⚙</button>
+        <div class="badge streak"><span class="lbl">Streak</span> <span id="streakNum">0</span>d</div>
+      </div>
+      <div class="badge rank"><span class="lbl">Rank</span> <span id="rankName">Cadet</span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ROUTE -->
+  <section class="view active" id="view-routine">
+    <h1 class="page-title">Today's Route</h1>
+    <h2 class="page-sub">Daily Flight Plan</h2>
+    <div class="quote-card" id="quoteCard">Loading briefing...</div>
+    <div class="challenge-card" id="challengeCard"></div>
+
+    <div class="gauge-wrap">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="30" fill="none" stroke="#232D40" stroke-width="7"/>
+        <circle id="gaugeRing" cx="36" cy="36" r="30" fill="none" stroke="#F5A623" stroke-width="7" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5" transform="rotate(-90 36 36)"/>
+        <text x="36" y="41" text-anchor="middle" class="gauge-num" id="gaugePct">0%</text>
+      </svg>
+      <div class="gauge-label"><b id="gaugeCount">0 / 0 legs complete</b>Check off each block as you fly through your day.</div>
+    </div>
+
+    <div class="strip-list" id="stripList"></div>
+    <div class="reset-link" id="resetToday">Reset today's checklist</div>
+
+    <div class="todo-card">
+      <div class="todo-head"><div class="todo-title">Daily To-Do</div><div class="todo-count" id="todoCount">0 / 0</div></div>
+      <div class="todo-add"><input id="newTodo" type="text" placeholder="Add a task for today..." autocomplete="off"><button id="addTodoBtn">ADD</button></div>
+      <div id="todoList"></div>
+    </div>
+
+    <div class="timer-card">
+      <div class="page-title" style="margin-bottom:2px;">Focus Session</div>
+      <div class="timer-display mono" id="timerDisplay">25:00</div>
+      <div class="timer-presets" id="timerPresets">
+        <button class="preset-btn active" data-min="25">25m</button>
+        <button class="preset-btn" data-min="45">45m</button>
+        <button class="preset-btn" data-min="60">60m</button>
+      </div>
+      <div class="timer-controls">
+        <button class="ctl-btn primary" id="timerStart">Start</button>
+        <button class="ctl-btn" id="timerReset">Reset</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STUDY -->
+  <section class="view" id="view-academics">
+    <h1 class="page-title">11th Grade · CBSE · DGCA · SAT</h1>
+    <h2 class="page-sub">Study</h2>
+    <div class="pill-row" id="modePills"></div>
+    <div class="pill-row" id="subjectPills"></div>
+    <div id="subjectContent"></div>
+  </section>
+
+  <!-- SELF-ED -->
+  <section class="view" id="view-selfed">
+    <h1 class="page-title">Self-Education · Full Year</h1>
+    <h2 class="page-sub" id="trackTitle">Aerospace — Hands-On</h2>
+    <div class="pill-row" id="trackPills"></div>
+    <div id="trackContent"></div>
+  </section>
+
+  <!-- READING -->
+  <section class="view" id="view-reading">
+    <h1 class="page-title">Bookshelf</h1>
+    <h2 class="page-sub">Reading Queue</h2>
+    <div id="bookList"></div>
+    <div class="section-label">Add a book</div>
+    <div class="add-form">
+      <input type="text" id="newBookTitle" placeholder="Title">
+      <input type="text" id="newBookAuthor" placeholder="Author (optional)">
+      <select id="newBookStatus">
+        <option value="reading">Currently reading</option>
+        <option value="next">Up next</option>
+        <option value="someday">Someday</option>
+      </select>
+      <button id="addBookBtn">Add to shelf</button>
+    </div>
+    <div class="section-label">Ideas for your 3rd pick (universe / astrophysics / aerospace, incl. fiction)</div>
+    <div class="suggest-chips" id="bookSuggestChips"></div>
+  </section>
+
+  <!-- ACHIEVEMENTS -->
+  <section class="view" id="view-achievements">
+    <h1 class="page-title">Resume Builder</h1>
+    <h2 class="page-sub">Achievements & Competitions</h2>
+    <div class="section-label">Logged</div>
+    <div id="achLoggedList"></div>
+    <div class="section-label">Upcoming / In Progress</div>
+    <div id="achUpcomingList"></div>
+    <div class="section-label">Add an entry</div>
+    <div class="add-form">
+      <input type="text" id="newAchTitle" placeholder="Title (e.g. ISSO Olympiad — National Round)">
+      <input type="text" id="newAchNote" placeholder="Note (optional)">
+      <select id="newAchCat">
+        <option>Competition</option>
+        <option>Olympiad</option>
+        <option>Leadership</option>
+        <option>Entrepreneurship</option>
+        <option>Research</option>
+        <option>Other</option>
+      </select>
+      <select id="newAchStatus">
+        <option value="upcoming">Upcoming</option>
+        <option value="in-progress">In progress</option>
+        <option value="completed">Completed</option>
+      </select>
+      <button id="addAchBtn">Add entry</button>
+    </div>
+
+    <div class="section-label">Resume Versions</div>
+    <div class="disclaimer">This app can only store text/notes, not actual files — so this is a version log, not a file upload. Keep your real resume files in Drive/email as usual; log each version here to track what changed and when.</div>
+    <div id="resumeList"></div>
+    <div class="add-form">
+      <input type="text" id="newResumeLabel" placeholder="Version label (e.g. v3 — added Spark Tank)">
+      <input type="text" id="newResumeNote" placeholder="What changed in this version">
+      <select id="newResumeStatus">
+        <option value="current">Current</option>
+        <option value="draft">Draft</option>
+        <option value="archived">Archived</option>
+      </select>
+      <button id="addResumeBtn">Log version</button>
+    </div>
+  </section>
+
+  <!-- LOGBOOK -->
+  <section class="view" id="view-log">
+    <h1 class="page-title">Mission Record</h1>
+    <h2 class="page-sub">Logbook</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-num" id="statStreak">0</div><div class="stat-lbl">Day streak</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--cyan)" id="statAcad">0%</div><div class="stat-lbl">Academics done</div></div>
+    </div>
+    <div class="page-title" style="margin-bottom:8px;">Last 7 Days — Route Completion</div>
+    <div class="chart" id="weekChart"></div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-num" style="color:var(--green)" id="statSelfEd">0%</div><div class="stat-lbl">Self-ed curriculum</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--amber)" id="statDgca">0%</div><div class="stat-lbl">DGCA prep</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--amber)" id="statBooks">0</div><div class="stat-lbl">Books finished</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--violet)" id="statAch">0</div><div class="stat-lbl">Achievements logged</div></div>
+    </div>
+    <div class="page-title" style="margin-bottom:8px;">Badges</div>
+    <div class="badge-grid" id="badgeGrid"></div>
+  </section>
+
+</main>
+
+<nav>
+  <button class="navbtn active" data-view="routine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16l20-8-8 20-2-8-8-2z"/></svg>Route</button>
+  <button class="navbtn" data-view="academics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Study</button>
+  <button class="navbtn" data-view="selfed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h6l-5 4 2 7-6-4-6 4 2-7-5-4h6z"/></svg>Self-Ed</button>
+  <button class="navbtn" data-view="reading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H9v20H4.5A2.5 2.5 0 0 1 2 19.5z"/><path d="M22 4.5A2.5 2.5 0 0 0 19.5 2H15v20h4.5a2.5 2.5 0 0 0 2.5-2.5z"/></svg>Read</button>
+  <button class="navbtn" data-view="achievements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"/></svg>Wins</button>
+  <button class="navbtn" data-view="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 3 4 5-8"/></svg>Log</button>
+</nav>
+
+<script>
+/* ===================== CONSTANTS ===================== */
+const SELFED_ROTATION = [
+  {name:"Flex / Reading"}, {name:"Physics & Astrophysics"}, {name:"AI & Robotics"},
+  {name:"Aerospace: DGCA + current affairs"}, {name:"Business & Entrepreneurship"},
+  {name:"Coding"}, {name:"Case Study of a Person"},
+];
+const QUOTES = [
+  "Discipline is choosing between what you want now and what you want most.",
+  "Every expert was once a beginner who refused to give up.",
+  "Small daily improvements compound into stunning results.",
+  "The sky isn't the limit — your habits are.",
+  "You don't rise to the level of your goals, you fall to the level of your systems.",
+  "Consistency beats intensity over the long runway.",
+  "Every great flight starts with a checklist, not a leap.",
+  "Curiosity is the fuel. Discipline is the engine.",
+];
+const CHALLENGES = [
+  "Name 3 constellations visible tonight without looking it up first.",
+  "Explain lift to an imaginary 10-year-old in 3 sentences.",
+  "Sketch a rocket and label every major part from memory.",
+  "Look up one DGCA regulation you didn't know existed.",
+  "Find one news story from aerospace/aviation today and summarize it in 2 lines.",
+  "Write down one habit of your current case-study person you could try this week.",
+  "Solve one JEE-level PYQ from any of your 3 science subjects, untimed.",
+  "Read the Wikipedia intro of any NASA/ISRO mission you've never heard of.",
+  "Teach one concept you learned this week to someone (even out loud to yourself).",
+  "Find 2 minutes to just look up at the sky before you sleep.",
+  "Write one sentence for your book — no pressure, just momentum.",
+  "Pick one word from an aviation glossary and learn it properly.",
+  "Sketch the CBSE unit map for one subject from memory, then check it.",
+  "List 3 things that went well in Project Polaris this week.",
+];
+function pad(n){return n.toString().padStart(2,'0');}
+function todayKey(d){ d=d||new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function fmt12(t){ let [h,m]=t.split(':').map(Number); const ap=h>=12?'PM':'AM'; let h12=h%12; if(h12===0)h12=12; return `${h12}:${pad(m)} ${ap}`; }
+function dayOfYear(d){ const start=new Date(d.getFullYear(),0,0); return Math.floor((d-start)/86400000); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+function buildBlocks(){
+  return [
+    {id:'wake', time:'06:00', label:'Wake Up', sub:'Water + freshen up', tag:'life'},
+    {id:'meditation', time:'06:10', label:'Meditation', sub:'Quiet terrace time + reset', tag:'life'},
+    {id:'exercise', time:'06:30', label:'Morning Exercise', sub:'Light movement / walk + get ready', tag:'life'},
+    {id:'breakfast', time:'07:00', label:'Breakfast + Day Plan', sub:'Breakfast and set the day’s priorities', tag:'life'},
+    {id:'deepstudy1', time:'07:30', label:'Deep Study Block 1 — Chemistry', sub:'Chemistry: concepts, NCERT, questions, and revision', tag:'acad'},
+    {id:'break1', time:'10:00', label:'Break', sub:'Proper break — step away from study', tag:'life'},
+    {id:'deepstudy2', time:'10:30', label:'Deep Study Block 2 — Maths', sub:'Maths: concepts, examples, and problem solving', tag:'acad'},
+    {id:'lunch', time:'13:00', label:'Lunch + Rest', sub:'Proper meal and downtime', tag:'life'},
+    {id:'deepstudy3', time:'14:00', label:'Deep Study Block 3 — Physics', sub:'Physics: concepts, numericals, and practice', tag:'acad'},
+    {id:'polaris', time:'16:00', label:'Project Polaris', sub:'One concrete execution outcome — not just planning', tag:'green'},
+    {id:'study4', time:'17:30', label:'Study Block 4 — CS / English', sub:'Computer Science or English', tag:'acad'},
+    {id:'rotating', time:'18:15', label:'Rotating Work Block', sub:'World Wings / Fondi / internships / volunteering', tag:'cyan'},
+    {id:'selfed', time:'19:45', label:'Reading / SAT / IELTS / Aerospace', sub:'Reading, SAT, IELTS, aerospace, or another self-education focus', tag:'amber'},
+    {id:'outdoor', time:'21:15', label:'Exercise / Outdoor Time', sub:'Move, get fresh air, and disconnect', tag:'life'},
+    {id:'dinner', time:'21:35', label:'Dinner + Downtime', sub:'Relax and wind down for sleep', tag:'life'},
+    {id:'sleep', time:'22:00', label:'Sleep', sub:'Protect tomorrow’s 6:00 AM start', tag:'life'},
+  ];
+}
+const TAG_COLOR = {acad:'var(--cyan-dim)', amber:'var(--amber)', cyan:'var(--cyan)', green:'var(--green)', life:'var(--line)', flex:'var(--violet)'};
+
+/* ---- Academics: CBSE Class 11 chapter checklists ---- */
+const ACADEMICS = {
+  phys:{label:"Physics", units:[
+    {u:"Physical World & Measurement", ch:["Units and Measurements"]},
+    {u:"Kinematics", ch:["Motion in a Straight Line","Motion in a Plane"]},
+    {u:"Laws of Motion", ch:["Laws of Motion"]},
+    {u:"Work, Energy and Power", ch:["Work, Energy and Power"]},
+    {u:"System of Particles & Rigid Body", ch:["System of Particles and Rotational Motion"]},
+    {u:"Gravitation", ch:["Gravitation"]},
+    {u:"Properties of Bulk Matter", ch:["Mechanical Properties of Solids","Mechanical Properties of Fluids","Thermal Properties of Matter"]},
+    {u:"Thermodynamics", ch:["Thermodynamics"]},
+    {u:"Kinetic Theory", ch:["Kinetic Theory of Gases"]},
+    {u:"Oscillations & Waves", ch:["Oscillations","Waves"]},
+  ]},
+  chem:{label:"Chemistry", units:[
+    {u:"Physical Chemistry", ch:["Some Basic Concepts of Chemistry","Structure of Atom","Chemical Thermodynamics","Equilibrium"]},
+    {u:"Inorganic Chemistry", ch:["Classification of Elements & Periodicity","Chemical Bonding & Molecular Structure","Redox Reactions"]},
+    {u:"Organic Chemistry", ch:["Organic Chemistry — Basic Principles & Techniques","Hydrocarbons"]},
+  ]},
+  math:{label:"Math", units:[
+    {u:"Sets & Functions", ch:["Sets","Relations and Functions","Trigonometric Functions"]},
+    {u:"Algebra", ch:["Complex Numbers & Quadratic Equations","Linear Inequalities","Permutations and Combinations","Binomial Theorem","Sequences and Series"]},
+    {u:"Coordinate Geometry", ch:["Straight Lines","Conic Sections","Introduction to 3D Geometry"]},
+    {u:"Calculus", ch:["Limits and Derivatives"]},
+    {u:"Statistics & Probability", ch:["Statistics","Probability"]},
+  ]},
+  eng:{label:"English", units:[
+    {u:"Core Skills", ch:["Reading Comprehension (unseen passages)","Writing Skills (notice/letter/analytical paragraph)","Grammar & Vocabulary"]},
+    {u:"Literature", ch:["Hornbill — Prose & Poetry","Snapshots — Supplementary Reader"]},
+  ]},
+  cs:{label:"Comp Sci", units:[
+    {u:"Foundations", ch:["Computer Systems Basics","Encoding Schemes & Number System"]},
+    {u:"Python Programming", ch:["Python Fundamentals","Flow of Control","Strings","Lists, Tuples & Dictionaries"]},
+    {u:"Society & Data", ch:["Societal Impacts of Computing"]},
+  ]},
+};
+const SAT_TOPICS = {
+  rw:{label:"Reading & Writing", topics:["Craft and Structure","Information and Ideas","Standard English Conventions","Expression of Ideas"]},
+  math:{label:"Math", topics:["Algebra","Advanced Math","Problem-Solving and Data Analysis","Geometry and Trigonometry"]},
+};
+const DGCA = {
+  regs:{label:"Air Regulations", units:[{u:"Core", ch:["Airspace classification","Rules of the Air","Air Traffic Services (ATS)","DGCA Civil Aviation Requirements (CARs)","Pilot licensing & certification","Flight & duty time limitations (FDTL)"]}]},
+  nav:{label:"Air Navigation", units:[{u:"Core", ch:["Great circle & rhumb line navigation","Position fixing & charts","Radio nav aids (VOR, DME, ADF, ILS)","Time calculations (UTC/IST/LMT)","Drift, ETA/ETD & fuel planning","Flight computer (E6B/CR-3) calculations"]}]},
+  met:{label:"Meteorology", units:[{u:"Core", ch:["Atmospheric pressure & temperature lapse rates","Cloud formation & classification","Thunderstorms, icing & turbulence","Jet streams & frontal systems","Aviation weather forecasting & charts"]}]},
+  techgen:{label:"Technical General", units:[{u:"Core", ch:["Principles of flight & aerodynamics","Aircraft structures","Piston & jet engine systems","Aircraft instruments","Electrical & hydraulic systems"]}]},
+  techspec:{label:"Technical Specific", units:[{u:"Core", ch:["Type-specific airframe systems","Type-specific engine/powerplant","Type-specific systems & limitations","Performance & weight/balance for type"]}]},
+  rtr:{label:"RTR (Radio Telephony)", units:[{u:"Core", ch:["Standard phraseology","R/T procedures — departure, en-route, approach","Emergency communication procedures","ATC clearance readback"]}]},
+};
+
+/* ---- Self-ed curriculum: 6 levels each, full-year pacing ---- */
+const CURRICULUM = {
+  aero:{color:'var(--amber)', title:'Aerospace — Hands-On', projects:[
+    "CanSat challenge — design a soda-can-sized 'satellite' payload with sensors + data logging",
+    "RC glider or foam plane build-and-fly — time distance/duration, iterate the design",
+    "Water bottle rocket altitude challenge — estimate altitude using trigonometry",
+    "Build and fly a basic drone, log telemetry if possible",
+    "Write a short research note/poster on a niche aerospace topic for a science fair or Spark Tank-style pitch"
+  ], levels:[
+    {name:"How Things Fly", tasks:["Learn the 4 forces of flight (lift/drag/thrust/weight)","Build 3 paper/foam gliders with different wing shapes, test glide distance","Log which design flew farthest — and why"],
+     guide:"Grab 3 sheets of paper, fold 3 different wing shapes, and test them off a balcony or hallway. The glider that flies straightest usually has the best lift-to-drag balance.",
+     links:[["NASA FoilSim (test wing shapes)","https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/foilsim/"]]},
+    {name:"Rockets & Propulsion", tasks:["Understand Newton's 3rd law + rocket equation (conceptually)","Build a bottle/balloon rocket or simple model rocket","Try SimpleRockets 2 or Kerbal Space Program demo"],
+     guide:"A balloon on a string is the fastest way to feel thrust = reaction force.",
+     links:[["SimpleRockets 2","https://www.jundroo.com/simplerockets2/"]]},
+    {name:"Flight & Aviation Systems", tasks:["Study one DGCA subject this week (see the Study tab)","Track 3 real flights overhead on Flightradar24","Try a procedure in X-Plane / MS Flight Simulator demo"],
+     guide:"This module directly feeds your DGCA prep — every real flight you spot overhead is a live case study in airspace and routing.",
+     links:[["Flightradar24","https://www.flightradar24.com/"]]},
+    {name:"Space Systems & Missions", tasks:["Pick one live mission (ISRO/ISS/current launch) and follow it weekly","Explore NASA Eyes on the Solar System","Sketch a small satellite/drone Earth-observation mission"],
+     guide:"Following one real mission week-to-week teaches you more than reading ten summaries of past missions.",
+     links:[["NASA Eyes on the Solar System","https://eyes.nasa.gov/apps/solar-system/"]],
+     capstone:"Could merge with the Keibul Lamjao documentary (satellite/drone monitoring of the park)."},
+    {name:"Aircraft Design & Aerodynamics", tasks:["Learn how airfoil camber & angle of attack affect lift","Sketch/CAD a simple aircraft concept with labeled parts","Study one real aircraft's specs (wingspan, MTOW, cruise speed) and why they're designed that way"],
+     guide:"This is where you start thinking like a designer, not just a physics student — every dimension on a real aircraft is a trade-off.",
+     links:[["Airfoil Tools","http://airfoiltools.com/"]]},
+    {name:"Capstone: Aerospace Project", tasks:["Choose one project from the list below and scope it out","Build/execute it over several weeks","Document it (photos, data, write-up) — a real portfolio piece"],
+     guide:"No fixed timeline for this one — let it run in parallel with whatever's live in your flexible slot.",
+     capstone:"This is the level with no deadline — it can span the rest of the year."}
+  ]},
+  space:{color:'var(--violet)', title:'Space Science & Astrophysics', projects:[
+    "Build a simple spectroscope from a CD/DVD and cardboard",
+    "Track a variable star's brightness over 2 weeks (AAVSO-style citizen observing)",
+    "Analyze real exoplanet data from NASA's archive and write it up",
+    "Watch a live rocket launch and log your observations",
+    "Contribute to a Zooniverse space-classification project"
+  ], levels:[
+    {name:"The Night Sky & Stargazing", tasks:["Learn 5 constellations visible from your location this month","Use Stellarium to map tonight's sky","Keep a 2-week observation log (what you saw, when, conditions)"],
+     guide:"Get the sky under your belt before the physics — literally recognizing what's overhead grounds everything that comes after.",
+     links:[["Stellarium Web (free planetarium)","https://stellarium-web.org/"],["NASA Astronomy Picture of the Day","https://apod.nasa.gov/apod/astropix.html"]]},
+    {name:"Stars, Light & Spectra", tasks:["Understand what a star's spectrum tells us (temperature, composition)","Explore the Hertzsprung-Russell diagram and where our Sun sits","Watch one Crash Course Astronomy episode and take notes"],
+     guide:"Spectra are how astronomers 'touch' objects light-years away.",
+     links:[["Crash Course Astronomy (YouTube)","https://www.youtube.com/playlist?list=PL8dPuuaLjXtN0ge7yDk_UA0ldZJdhwkoV"]]},
+    {name:"Cosmology & the Big Picture", tasks:["Learn the scale of the universe (solar system → galaxy → observable universe)","Explore NASA's Eyes on Exoplanets","Write a 1-page explainer of the Big Bang in your own words"],
+     guide:"If you can teach the expansion of the universe simply, you actually understand it.",
+     links:[["Eyes on Exoplanets","https://eyes.nasa.gov/apps/exo/"]]},
+    {name:"Astrophysics in Practice", tasks:["Browse the NASA Exoplanet Archive and pick one confirmed exoplanet to study","Summarize what's known about it (size, orbit, host star)","Connect it back to your aerospace track — how would we ever reach it?"],
+     guide:"This is where astrophysics stops being trivia and starts being research.",
+     links:[["NASA Exoplanet Archive","https://exoplanetarchive.ipac.caltech.edu/"]],
+     capstone:"Write a 1-page 'mission brief' on your chosen exoplanet as if pitching a future mission."},
+    {name:"Observational Astronomy", tasks:["Try basic astrophotography (even phone long-exposure of the moon/stars)","Learn to use a star app to identify a planet visible tonight","Join a citizen-science project (Zooniverse) and classify real data for 30 minutes"],
+     guide:"Real data beats simulations — citizen science projects use genuine unclassified telescope data.",
+     links:[["Zooniverse","https://www.zooniverse.org/"]]},
+    {name:"Capstone: Astrophysics Research Note", tasks:["Pick a real open question in astrophysics/space science that interests you","Read 2-3 accessible sources on it","Write a 1-page research note summarizing the question and what's known"],
+     guide:"Treat this like a mini research paper — it's genuinely usable for a college application.",
+     capstone:"This level has no deadline — let it run alongside whatever else is live."}
+  ]},
+  robo:{color:'var(--cyan)', title:'Robotics — Hands-On', projects:[
+    "Line-following robot competition — time yourself on a track",
+    "Voice or gesture-controlled device using Teachable Machine + a simple actuator",
+    "Obstacle-avoiding robot with an ultrasonic sensor",
+    "A simple robotic arm (even a cardboard/servo prototype)",
+    "Enter a local or online robotics challenge if one is accessible"
+  ], levels:[
+    {name:"Circuits & Logic", tasks:["Learn what a sensor, actuator, and microcontroller each do","Get an Arduino Uno starter kit (or study 3 robot teardown videos)","Diagram signal flow: sensor → brain → motor"],
+     guide:"An Arduino Uno starter kit doesn't need a laptop for basic circuits — only for uploading code, which you can do once a week wherever you get device access.",
+     links:[]},
+    {name:"Programming the Brain", tasks:["Learn basic if/else + loop control logic","Try Tinkercad Circuits (free, browser-based simulation)","Build a line-following or obstacle-avoiding robot"],
+     guide:"Tinkercad works on any browser — school or library computer is enough.",
+     links:[["Tinkercad Circuits","https://www.tinkercad.com/circuits"]]},
+    {name:"AI Meets Robotics", tasks:["Understand sensor data → model → decision","Train a model in Google Teachable Machine","Test it recognizing an object or gesture"],
+     guide:"Teachable Machine trains on your phone camera in minutes — genuinely feels like magic the first time.",
+     links:[["Google Teachable Machine","https://teachablemachine.withgoogle.com/"]]},
+    {name:"Systems Thinking", tasks:["Take apart / study a teardown of an old motorized device","Map every component to what you learned in Levels 1-3","Sketch a capstone robotics project idea"],
+     guide:"Real devices are messier than diagrams — that gap is where the actual learning happens."},
+    {name:"Autonomous Navigation", tasks:["Learn what a feedback/PID loop conceptually does","Build or simulate a robot that follows a wall or solves a simple maze","Log what failed each attempt and why"],
+     guide:"Autonomous navigation is just: sense → decide → correct, repeated fast. Every failed attempt teaches you exactly where that loop broke."},
+    {name:"Capstone: Robotics Build", tasks:["Pick one project from the list below and scope it out","Build it over several weeks, iterating on failures","Document with photos/video for your portfolio"],
+     capstone:"This level has no deadline — it can run for the rest of the year."}
+  ]},
+};
+const CASE_STEPS = ["Timeline — map their major decisions and turning points","Habits/systems — what they actually did daily/weekly that's replicable","One failure — what went wrong once, and what changed after","Apply — pick ONE habit to trial in your own life for 2 weeks"];
+const CASE_SUGGESTIONS = ["Sunita Williams — astronaut","Kalpana Chawla — astronaut","Elon Musk — SpaceX/Tesla","Burt Rutan — aerospace engineer","Fei-Fei Li — AI researcher","Sundar Pichai — tech/AI leadership","Sara Blakely — entrepreneur","Falguni Nayar — entrepreneur"];
+const BOOK_SUGGESTIONS = ["Project Hail Mary — Andy Weir","The Martian — Andy Weir","Cosmos — Carl Sagan","A Brief History of Time — Stephen Hawking","The Right Stuff — Tom Wolfe","Astrophysics for People in a Hurry — Neil deGrasse Tyson"];
+const DEFAULT_ACHIEVEMENTS = [
+  {title:"Head Girl", category:"Leadership", status:"in-progress", note:"School leadership role"},
+  {title:"Founder & Operations Head, Project Polaris", category:"Entrepreneurship", status:"in-progress"},
+  {title:"NEMORA — The Silent Kingdom (documentary)", category:"Competition", status:"in-progress", note:"Inter-school documentary competition, Keibul Lamjao National Park"},
+  {title:"Oxford Saïd Global Climate Tech Challenge", category:"Competition", status:"in-progress"},
+  {title:"Spark Tank Competition — Delhi Summit", category:"Competition", status:"upcoming"},
+  {title:"ISSO Olympiad (Edumithra)", category:"Olympiad", status:"upcoming", note:"Next month"},
+];
+const DEFAULT_BOOKS = [
+  {title:"Atomic Habits", author:"James Clear", status:"reading", progress:0},
+  {title:"Introduction to Flight", author:"John D. Anderson", status:"next", progress:0},
+];
+const BADGES = [
+  {id:'firstday', emoji:'🛫', name:'First Flight', check:s=>s.streak>=1},
+  {id:'week', emoji:'🔥', name:'7-Day Streak', check:s=>s.streak>=7},
+  {id:'aviator', emoji:'✈️', name:'Aviator', check:s=>s.aeroL1},
+  {id:'rocket', emoji:'🚀', name:'Rocketeer', check:s=>s.aeroL2},
+  {id:'stargazer', emoji:'🔭', name:'Stargazer', check:s=>s.spaceL1},
+  {id:'bot', emoji:'🤖', name:'Roboticist', check:s=>s.roboL1},
+  {id:'bookworm', emoji:'📚', name:'Bookworm', check:s=>s.booksDone>=1},
+  {id:'closer', emoji:'🧭', name:'Case Closed', check:s=>s.caseDone>=1},
+  {id:'dgca', emoji:'🛂', name:'Ground School', check:s=>s.dgcaAny},
+  {id:'resume', emoji:'📄', name:'Resume Builder', check:s=>s.achCount>=3},
+];
+
+/* ===================== STATE ===================== */
+let blocks = buildBlocks();
+let customBlocks = null;
+let customQuotes = null;
+let customChallenges = null;
+let customCallsign = null;
+let customStudyTitle = null;
+let todos = [];
+let todayData = {checked:[]};
+let academics = {};
+let dgcaState = {};
+let satTopics = {rw:[], math:[]};
+let curriculumProgress = {aero:{}, space:{}, robo:{}};
+let caseList = [];
+let books = [];
+let achievements = [];
+let resumeVersions = [];
+let studyMode = 'school';
+let currentSubject = 'phys';
+let currentDgca = 'regs';
+let currentTrack = 'aero';
+let timerInterval=null, timerSeconds=25*60, timerRunning=false;
+
+async function safeGet(key) {
+  const value = localStorage.getItem(key);
+  return value ? JSON.parse(value) : null;
+}
+
+async function safeSet(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+/* ===================== INIT ===================== */
+async function init(){
+  const tk = todayKey();
+  customBlocks = await safeGet('custom:routine');
+  customQuotes = await safeGet('custom:quotes');
+  customChallenges = await safeGet('custom:challenges');
+  customCallsign = await safeGet('custom:callsign');
+  customStudyTitle = await safeGet('custom:studyTitle');
+  blocks = customBlocks || buildBlocks();
+  todos = (await safeGet('todo:'+tk)) || [];
+  todayData = (await safeGet('day:'+tk)) || {checked:[]};
+  academics = (await safeGet('academics')) || {};
+  dgcaState = (await safeGet('dgca')) || {};
+  satTopics = (await safeGet('sat:topics')) || {rw:[false,false,false,false], math:[false,false,false,false]};
+  curriculumProgress.aero = (await safeGet('progress:aero')) || {};
+  curriculumProgress.space = (await safeGet('progress:space')) || {};
+  curriculumProgress.robo = (await safeGet('progress:robo')) || {};
+  caseList = await safeGet('progress:case');
+  if(!caseList){ caseList = [{id:uid(), name:"Elon Musk", steps:[false,false,false,false]}]; await safeSet('progress:case', caseList); }
+  books = await safeGet('reading:books');
+  if(!books){ books = DEFAULT_BOOKS.map(b=>({...b, id:uid()})); await safeSet('reading:books', books); }
+  achievements = await safeGet('achievements');
+  if(!achievements){ achievements = DEFAULT_ACHIEVEMENTS.map(a=>({...a, id:uid()})); await safeSet('achievements', achievements); }
+  resumeVersions = (await safeGet('resume:versions')) || [];
+  const challengeDone = await safeGet('challenge:'+tk);
+
+  if(customCallsign) document.querySelector('.callsign').textContent=customCallsign;
+  if(customStudyTitle) document.querySelector('#view-academics .page-title').textContent=customStudyTitle;
+  renderClock();
+  setInterval(renderClock, 1000);
+  renderQuote();
+  renderChallenge(!!(challengeDone && challengeDone.done));
+  renderRoutine();
+  renderTodos();
+  renderModePills();
+  renderSubjectPills();
+  renderSubject();
+  renderTrackPills();
+  renderTrack();
+  renderBooks();
+  renderBookSuggestions();
+  renderAchievements();
+  renderResumeVersions();
+  await renderLogbook();
+  await renderStreak();
+  await renderRank();
+  setupTimer();
+  setupEditPortal();
+  document.getElementById('addTodoBtn').onclick = addTodo;
+  document.getElementById('newTodo').addEventListener('keydown', e=>{ if(e.key==='Enter') addTodo(); });
+
+  document.getElementById('resetToday').onclick = async ()=>{
+    todayData = {checked:[]};
+    await safeSet('day:'+todayKey(), todayData);
+    renderRoutine(); await renderLogbook(); await renderStreak(); await renderRank();
+  };
+  document.querySelectorAll('.navbtn').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-'+btn.dataset.view).classList.add('active');
+      if(btn.dataset.view==='log') renderLogbook();
+    };
+  });
+  document.getElementById('addBookBtn').onclick = addBook;
+  document.getElementById('addAchBtn').onclick = addAchievement;
+  document.getElementById('addResumeBtn').onclick = addResumeVersion;
+}
+
+function renderClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  document.getElementById('datestr').textContent = now.toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
+}
+function renderQuote(){ const q=(customQuotes&&customQuotes.length?customQuotes:QUOTES); document.getElementById('quoteCard').textContent = q[dayOfYear(new Date()) % q.length]; }
+function renderChallenge(done){
+  const el = document.getElementById('challengeCard');
+  const pool=(customChallenges&&customChallenges.length?customChallenges:CHALLENGES);
+   const text = pool[dayOfYear(new Date()) % pool.length];
+  el.className = 'challenge-card' + (done?' done':'');
+  el.innerHTML = `<div class="fcheck ${done?'done':''}" id="challengeCheck" style="margin-top:1px;"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0E17" stroke-width="3" stroke-linecap="round"><polyline points="4 12 9 18 20 6"/></svg></div>
+    <div><div class="clabel">Today's Flight Challenge</div><div class="ctext">${text}</div></div>`;
+  document.getElementById('challengeCheck').onclick = async ()=>{
+    const nowDone = !el.classList.contains('done');
+    await safeSet('challenge:'+todayKey(), {done:nowDone});
+    renderChallenge(nowDone);
+    await renderRank();
+  };
+}
+
+/* ===================== ROUTE ===================== */
+function renderRoutine(){
+  const list = document.getElementById('stripList');
+  list.innerHTML = '';
+  blocks.forEach(b=>{
+    const done = todayData.checked.includes(b.id);
+    const row = document.createElement('div');
+    row.className = 'fstrip' + (done?' done':'');
+    row.innerHTML = `
+      <div class="ftime mono">${fmt12(b.time)}</div>
+      <div class="ftag" style="background:${TAG_COLOR[b.tag]}"></div>
+      <div class="fbody"><div class="flabel">${b.label}</div>${b.sub?`<div class="fsub">${b.sub}</div>`:''}</div>
+      <div class="fcheck ${done?'done':''}" data-id="${b.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0A0E17" stroke-width="3" stroke-linecap="round"><polyline points="4 12 9 18 20 6"/></svg>
+      </div>`;
+    row.querySelector('.fcheck').onclick = async ()=>{
+      const idx = todayData.checked.indexOf(b.id);
+      if(idx>-1) todayData.checked.splice(idx,1); else todayData.checked.push(b.id);
+      await safeSet('day:'+todayKey(), todayData);
+      renderRoutine(); await renderStreak(); await renderRank();
+    };
+    list.appendChild(row);
+  });
+  const pct = Math.round((todayData.checked.length/blocks.length)*100);
+  const circumference = 188.5;
+  document.getElementById('gaugeRing').style.strokeDashoffset = circumference - (circumference*pct/100);
+  document.getElementById('gaugePct').textContent = pct+'%';
+  document.getElementById('gaugeCount').textContent = `${todayData.checked.length} / ${blocks.length} legs complete`;
+}
+
+
+/* ===================== DAILY TO-DO ===================== */
+function renderTodos(){
+  const wrap=document.getElementById('todoList'); if(!wrap) return;
+  wrap.innerHTML='';
+  const done=todos.filter(t=>t.done).length;
+  document.getElementById('todoCount').textContent=`${done} / ${todos.length}`;
+  if(!todos.length){ wrap.innerHTML='<div class="todo-empty">No tasks yet. Add what actually needs to happen today.</div>'; return; }
+  todos.forEach(t=>{
+    const row=document.createElement('div'); row.className='todo-row'+(t.done?' done':'');
+    row.innerHTML=`<div class="todo-check ${t.done?'done':''}">${t.done?'✓':''}</div><div class="todo-text"></div><button class="todo-del" aria-label="Delete task">×</button>`;
+    row.querySelector('.todo-text').textContent=t.text;
+    row.querySelector('.todo-check').onclick=async()=>{t.done=!t.done; await safeSet('todo:'+todayKey(),todos); renderTodos();};
+    row.querySelector('.todo-del').onclick=async()=>{todos=todos.filter(x=>x.id!==t.id); await safeSet('todo:'+todayKey(),todos); renderTodos();};
+    wrap.appendChild(row);
+  });
+}
+async function addTodo(){
+  const input=document.getElementById('newTodo'); const text=input.value.trim(); if(!text)return;
+  todos.push({id:uid(),text,done:false}); await safeSet('todo:'+todayKey(),todos); input.value=''; renderTodos();
+}
+
+/* ===================== EDIT PORTAL ===================== */
+function setupEditPortal(){
+  const back=document.getElementById('portalBackdrop');
+  document.getElementById('openPortal').onclick=()=>{openPortal();};
+  document.getElementById('closePortal').onclick=()=>back.classList.remove('open');
+  back.addEventListener('click',e=>{if(e.target===back)back.classList.remove('open');});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')back.classList.remove('open');});
+  document.getElementById('addBlockBtn').onclick=()=>{
+    const b={id:uid(),time:'08:00',label:'New Block',sub:'',tag:'life'};
+    blocks.push(b); renderPortalBlocks();
+  };
+  document.getElementById('savePortal').onclick=savePortal;
+  document.getElementById('resetCustomBtn').onclick=async()=>{
+    if(!confirm('Restore the original default routine? Your checklist history will remain, but custom routine edits will be removed.')) return;
+    customBlocks=null; customQuotes=null; customChallenges=null; customCallsign=null; customStudyTitle=null;
+    ['custom:routine','custom:quotes','custom:challenges','custom:callsign','custom:studyTitle'].forEach(k=>localStorage.removeItem(k));
+    blocks=buildBlocks(); renderQuote(); renderChallenge(false); renderRoutine(); renderPortal();
+    document.querySelector('.callsign').textContent='Self-Ed Flight Deck';
+    document.querySelector('#view-academics .page-title').textContent='11th Grade · CBSE · DGCA · SAT';
+    setPortalStatus('Default routine restored.');
+    await renderLogbook(); await renderStreak(); await renderRank();
+  };
+}
+function openPortal(){
+  renderPortal(); document.getElementById('portalBackdrop').classList.add('open');
+}
+function renderPortal(){
+  renderPortalBlocks();
+  document.getElementById('portalQuotes').value=(customQuotes&&customQuotes.length?customQuotes:QUOTES).join('\n');
+  document.getElementById('portalChallenges').value=(customChallenges&&customChallenges.length?customChallenges:CHALLENGES).join('\n');
+  document.getElementById('portalCallsign').value=customCallsign||document.querySelector('.callsign').textContent;
+  document.getElementById('portalStudyTitle').value=customStudyTitle||document.querySelector('#view-academics .page-title').textContent;
+}
+function renderPortalBlocks(){
+  const wrap=document.getElementById('portalBlocks'); if(!wrap)return; wrap.innerHTML='';
+  blocks.forEach((b,i)=>{
+    const item=document.createElement('div'); item.className='portal-list-item';
+    item.innerHTML=`<div class="portal-item-top"><div class="portal-item-id">BLOCK ${String(i+1).padStart(2,'0')}</div><div class="portal-mini-actions"><button class="portal-mini up">↑</button><button class="portal-mini down">↓</button><button class="portal-mini danger delete">Delete</button></div></div>
+      <div class="portal-grid"><div class="portal-field"><label>Time</label><input class="b-time" type="time" value="${escapeAttr(b.time)}"></div><div class="portal-field"><label>Tag</label><select class="b-tag"><option value="acad">Academic</option><option value="amber">Amber</option><option value="cyan">Cyan</option><option value="green">Polaris/Green</option><option value="life">Life</option><option value="flex">Flexible</option></select></div><div class="portal-field full"><label>Title</label><input class="b-label" type="text" value="${escapeAttr(b.label)}"></div><div class="portal-field full"><label>Description</label><input class="b-sub" type="text" value="${escapeAttr(b.sub||'')}"></div></div>`;
+    item.querySelector('.b-tag').value=b.tag||'life';
+    item.querySelector('.up').onclick=()=>{if(i>0){[blocks[i-1],blocks[i]]=[blocks[i],blocks[i-1]];renderPortalBlocks();}};
+    item.querySelector('.down').onclick=()=>{if(i<blocks.length-1){[blocks[i+1],blocks[i]]=[blocks[i],blocks[i+1]];renderPortalBlocks();}};
+    item.querySelector('.delete').onclick=()=>{if(blocks.length<=1)return;blocks.splice(i,1);renderPortalBlocks();};
+    wrap.appendChild(item);
+  });
+}
+function escapeAttr(v){return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function savePortal(){
+  const items=[...document.querySelectorAll('#portalBlocks .portal-list-item')];
+  blocks=items.map((item,i)=>({
+    id:blocks[i]?.id||uid(),
+    time:item.querySelector('.b-time').value||'08:00',
+    label:item.querySelector('.b-label').value.trim()||'Untitled Block',
+    sub:item.querySelector('.b-sub').value.trim(),
+    tag:item.querySelector('.b-tag').value||'life'
+  }));
+  customBlocks=blocks;
+  customQuotes=document.getElementById('portalQuotes').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  customChallenges=document.getElementById('portalChallenges').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  customCallsign=document.getElementById('portalCallsign').value.trim()||'Self-Ed Flight Deck';
+  customStudyTitle=document.getElementById('portalStudyTitle').value.trim()||'11th Grade · CBSE · DGCA · SAT';
+  await safeSet('custom:routine',customBlocks); await safeSet('custom:quotes',customQuotes); await safeSet('custom:challenges',customChallenges); await safeSet('custom:callsign',customCallsign); await safeSet('custom:studyTitle',customStudyTitle);
+  document.querySelector('.callsign').textContent=customCallsign; document.querySelector('#view-academics .page-title').textContent=customStudyTitle;
+  renderQuote(); renderChallenge(false); renderRoutine(); await renderLogbook(); await renderStreak(); await renderRank();
+  setPortalStatus('Saved locally ✓');
+}
+function setPortalStatus(text){const el=document.getElementById('portalStatus'); if(el){el.textContent=text; setTimeout(()=>{if(el.textContent===text)el.textContent='';},2500);}}
+
+/* ===================== TIMER ===================== */
+function setupTimer(){
+  document.querySelectorAll('.preset-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      if(timerRunning) return;
+      document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      timerSeconds = parseInt(btn.dataset.min)*60;
+      updateTimerDisplay();
+    };
+  });
+  document.getElementById('timerStart').onclick = ()=>{
+    if(timerRunning){
+      clearInterval(timerInterval); timerRunning=false;
+      document.getElementById('timerStart').textContent='Start';
+    } else {
+      timerRunning=true;
+      document.getElementById('timerStart').textContent='Pause';
+      timerInterval = setInterval(()=>{
+        timerSeconds--;
+        updateTimerDisplay();
+        if(timerSeconds<=0){ clearInterval(timerInterval); timerRunning=false; document.getElementById('timerStart').textContent='Start'; document.getElementById('timerDisplay').textContent='Done!'; }
+      },1000);
+    }
+  };
+  document.getElementById('timerReset').onclick = ()=>{
+    clearInterval(timerInterval); timerRunning=false;
+    const active = document.querySelector('.preset-btn.active');
+    timerSeconds = parseInt(active.dataset.min)*60;
+    document.getElementById('timerStart').textContent='Start';
+    updateTimerDisplay();
+  };
+  updateTimerDisplay();
+}
+function updateTimerDisplay(){
+  const m = Math.floor(timerSeconds/60), s = timerSeconds%60;
+  document.getElementById('timerDisplay').textContent = `${pad(m)}:${pad(s)}`;
+}
+
+/* ===================== STUDY (Academics / DGCA / SAT) ===================== */
+function renderModePills(){
+  const wrap = document.getElementById('modePills');
+  wrap.innerHTML = '';
+  [['school','School Subjects'],['dgca','DGCA'],['sat','SAT']].forEach(([key,label])=>{
+    const p = document.createElement('div');
+    p.className = 'pill'+(studyMode===key?' on':'');
+    if(studyMode===key) p.style.cssText='background:var(--cyan);border-color:var(--cyan);color:#0A0E17;';
+    p.textContent = label;
+    p.onclick = ()=>{ studyMode=key; renderModePills(); renderSubjectPills(); renderSubject(); };
+    wrap.appendChild(p);
+  });
+}
+function renderSubjectPills(){
+  const wrap = document.getElementById('subjectPills');
+  wrap.innerHTML = '';
+  if(studyMode==='sat'){ wrap.style.display='none'; return; }
+  wrap.style.display='flex';
+  const src = studyMode==='school' ? ACADEMICS : DGCA;
+  const cur = studyMode==='school' ? currentSubject : currentDgca;
+  Object.keys(src).forEach(key=>{
+    const p = document.createElement('div');
+    p.className = 'pill'+(cur===key?' on':'');
+    if(cur===key) p.style.cssText='background:var(--amber);border-color:var(--amber);color:#0A0E17;';
+    p.textContent = src[key].label;
+    p.onclick = ()=>{ if(studyMode==='school') currentSubject=key; else currentDgca=key; renderSubjectPills(); renderSubject(); };
+    wrap.appendChild(p);
+  });
+}
+function renderGenericChecklist(subj, stateObj, key, color){
+  const total = subj.units.reduce((s,u)=>s+u.ch.length,0);
+  if(!stateObj[key]) stateObj[key] = new Array(total).fill(false);
+  const state = stateObj[key];
+  const doneCh = state.filter(Boolean).length;
+  const pct = Math.round((doneCh/total)*100);
+  const card = document.createElement('div');
+  card.className = 'card';
+  let idx=0;
+  let html = `<div class="card-head"><div class="card-name">${subj.label}</div><div class="card-idx">${doneCh}/${total}</div></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${color}"></div></div>`;
+  subj.units.forEach(u=>{
+    if(u.u!=="Core") html += `<div class="unit-label">${u.u}</div>`;
+    u.ch.forEach(chName=>{
+      const i=idx;
+      html += `<div class="task-row ${state[i]?'done':''}" data-ti="${i}">
+        <div class="task-check ${state[i]?'done':''}" style="${state[i]?`background:${color};border-color:${color}`:''}"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0E17" stroke-width="3" stroke-linecap="round"><polyline points="4 12 9 18 20 6"/></svg></div>
+        <div class="task-text">${chName}</div></div>`;
+      idx++;
+    });
+  });
+  card.innerHTML = html;
+  card.querySelectorAll('.task-row').forEach(row=>{
+    row.onclick = async ()=>{
+      const ti = parseInt(row.dataset.ti);
+      state[ti] = !state[ti];
+      const storeKey = stateObj===academics ? 'academics' : 'dgca';
+      await safeSet(storeKey, stateObj);
+      renderSubject(); await renderLogbook(); await renderRank();
+    };
+  });
+  return card;
+}
+function renderSubject(){
+  const c = document.getElementById('subjectContent');
+  c.innerHTML = '';
+  if(studyMode==='sat'){
+    Object.entries(SAT_TOPICS).forEach(([key,group])=>{
+      if(!satTopics[key]) satTopics[key] = group.topics.map(()=>false);
+      const doneCount = satTopics[key].filter(Boolean).length;
+      const pct = Math.round((doneCount/group.topics.length)*100);
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-head"><div class="card-name">${group.label}</div><div class="card-idx">${doneCount}/${group.topics.length}</div></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(--amber)"></div></div>
+        ${group.topics.map((t,ti)=>`<div class="task-row ${satTopics[key][ti]?'done':''}" data-ti="${ti}">
+          <div class="task-check ${satTopics[key][ti]?'done':''}" style="${satTopics[key][ti]?'background:var(--amber);border-color:var(--amber)':''}"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0E17" stroke-width="3" stroke-linecap="round"><polyline points="4 12 9 18 20 6"/></svg></div>
+          <div class="task-text">${t}</div></div>`).join('')}`;
+      card.querySelectorAll('.task-row').forEach(row=>{
+        row.onclick = async ()=>{
+          const ti = parseInt(row.dataset.ti);
+          satTopics[key][ti] = !satTopics[key][ti];
+          await safeSet('sat:topics', satTopics);
+          renderSubject(); await renderLogbook(); await renderRank();
+        };
+      });
+      c.appendChild(card);
+    });
+    const note = document.createElement('div');
+    note.className='disclaimer';
+    note.textContent = "Test: December. Rotate R&W and Math in your post-lunch slot; add one full timed section weekly starting ~8 weeks out. No device? Khan Academy's SAT prep runs fully on a phone browser, and printed/borrowed practice tests cover full-length timed drilling.";
+    c.appendChild(note);
+    return;
+  }
+  if(studyMode==='dgca'){
+    if(!dgcaState) dgcaState = {};
+    c.appendChild(renderGenericChecklist(DGCA[currentDgca], dgcaState, currentDgca, 'var(--amber)'));
+    const note = document.createElement('div');
+    note.className = 'disclaimer';
+    note.textContent = "You're only taking the actual DGCA exam after 12th — this is early groundwork so the real ground-school year feels like review, not a first pass. Air Regulations is a good one to be on now since it's largely conceptual/legal rather than calculation-heavy.";
+    c.appendChild(note);
+    return;
+  }
+  const subj = ACADEMICS[currentSubject];
+  c.appendChild(renderGenericChecklist(subj, academics, currentSubject, 'var(--cyan)'));
+}
+
+/* ===================== SELF-ED ===================== */
+function renderTrackPills(){
+  const wrap = document.getElementById('trackPills');
+  wrap.innerHTML = '';
+  const items = [{key:'aero',label:'Aerospace'},{key:'space',label:'Space & Astro'},{key:'robo',label:'Robotics'},{key:'case',label:'Case Studies'}];
+  items.forEach(it=>{
+    const p = document.createElement('div');
+    const color = it.key==='aero'?'var(--amber)':it.key==='space'?'var(--violet)':it.key==='robo'?'var(--cyan)':'var(--green)';
+    p.className = 'pill'+(currentTrack===it.key?' on':'');
+    if(currentTrack===it.key) p.style.cssText=`background:${color};border-color:${color};color:#0A0E17;`;
+    p.textContent = it.label;
+    p.onclick = ()=>{ currentTrack=it.key; renderTrackPills(); renderTrack(); };
+    wrap.appendChild(p);
+  });
+}
+function renderTrack(){
+  const c = document.getElementById('trackContent');
+  c.innerHTML = '';
+  if(currentTrack==='case'){
+    document.getElementById('trackTitle').textContent = 'Case Studies of People';
+    document.getElementById('trackTitle').style.color = 'var(--green)';
+    caseList.forEach(person=>{
+      const doneCount = person.steps.filter(Boolean).length;
+      const pct = Math.round((doneCount/4)*100);
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-head"><div class="card-name">${person.name}</div><div class="card-idx">${doneCount}/4</div></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(--green)"></div></div>
+        ${CASE_STEPS.map((s,i)=>`<div class="task-row ${person.steps[i]?'done':''}" data-i="${i}">
+          <div class="task-check ${person.steps[i]?'done':''}" style="${person.steps[i]?'background:var(--green);border-color:var(--green)':''}"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0E17" stroke-width="3" stroke-linecap="round"><polyline points="4 12 9 18 20 6"/></svg></div>
+          <div class="task-text">${s}</div></div>`).join('')}`;
+      card.querySelectorAll('.task-row').forEach(row=>{
+        row.onclick = async ()=>{
+          const i = parseInt(row.dataset.i);
+          person.steps[i] = !person.steps[i];
+          await safeSet('progress:case', caseList);
+          renderTrack(); await renderLogbook(); await renderRank();
+        };
+      });
+      c.appendChild(card);
+    });
+    const addForm = document.createElement('div');
+    addForm.className = 'add-form';
+    addForm.innerHTML = `<input type="text" id="newPersonName" placeholder="Person to study"><button id="addPersonBtn">Add to queue</button>`;
+    c.appendChild(addForm);
+    document.getElementById('addPersonBtn').onclick = async ()=>{
+      const val = document.getElementById('newPersonName').value.trim();
+      if(!val) return;
+      caseList.push({id:uid(), name:val, steps:[false,false,false,false]});
+      await safeSet('progress:case', caseList);
+      document.getElementById('newPersonName').value='';
+      renderTrack();
+    };
+    const sLabel = document.createElement('div');
+    sLabel.className = 'section-label';
+    sLabel.textContent = 'People who match your interests';
+    c.appendChild(sLabel);
+    const chips = document.createElement('div');
+    chips.className = 'suggest-chips';
+    CASE_SUGGESTIONS.forEach(s=>{
+      const chip = document.createElement('div');
+      chip.className='chip'; chip.textContent=s;
+      chip.onclick = async ()=>{
+        const name = s.split(' — ')[0];
+        if(caseList.some(p=>p.name===name)) return;
+        caseList.push({id:uid(), name, steps:[false,false,false,false]});
+        await safeSet('progress:case', caseList);
+        renderTrack();
+      };
+      chips.appendChild(chip);
+    });
+    c.appendChild(chips);
+    return;
+  }
+  const track = CURRICULUM[currentTrack];
+  document.getElementById('trackTitle').textContent = track.title;
+  document.getElementById('trackTitle').style.color = track.color;
+  track.levels.forEach((level, li)=>{
+    const key = 'L'+li;
+    const state = curriculumProgress[currentTrack][key] || level.tasks.map(()=>false);
+    const doneCount = state.filter(Boolean).length;
+    const pct = Math.round((doneCount/level.tasks.length)*100);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="card-head"><div class="card-name">${level.name}</div><div class="card-idx">LVL ${li+1} · ${doneCount}/${level.tasks.length}</div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${track.color}"></div></div>
+      ${level.tasks.map((t,ti)=>`<div class="task-row ${state[ti]?'done':''}" data-ti="${ti}">
+        <div class="task-check ${state[ti]?'done':''}" style="${state[ti]?`background:${track.color};border-color:${track.color}`:''}"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0E17" stroke-width="3" stroke-linecap="round"><polyline points="4 12 9 18 20 6"/></svg></div>
+        <div class="task-text">${t}</div></div>`).join('')}
+      ${level.capstone?`<div class="capstone" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--muted);font-style:italic;">${level.capstone}</div>`:''}
+      ${level.guide?`<details class="guide"><summary>Guide & resources</summary><p>${level.guide}</p>${(level.links||[]).map(l=>`<a href="${l[1]}" target="_blank" rel="noopener">${l[0]} →</a>`).join('')}</details>`:''}`;
+    card.querySelectorAll('.task-row').forEach(row=>{
+      row.onclick = async ()=>{
+        const ti = parseInt(row.dataset.ti);
+        state[ti] = !state[ti];
+        curriculumProgress[currentTrack][key] = state;
+        await safeSet('progress:'+currentTrack, curriculumProgress[currentTrack]);
+        renderTrack(); await renderLogbook(); await renderRank();
+      };
+    });
+    c.appendChild(card);
+  });
+  const projCard = document.createElement('div');
+  projCard.className = 'card';
+  projCard.innerHTML = `<div class="card-name" style="margin-bottom:10px;">Extended Project Ideas</div><ul class="proj-list">${track.projects.map(p=>`<li>${p}</li>`).join('')}</ul>`;
+  c.appendChild(projCard);
+}
+
+/* ===================== READING ===================== */
+function statusColor(s){ return s==='reading'?'var(--cyan)':s==='next'?'var(--amber)':s==='completed'?'var(--green)':'var(--muted)'; }
+function renderBooks(){
+  const wrap = document.getElementById('bookList');
+  wrap.innerHTML = '';
+  books.forEach(b=>{
+    const card = document.createElement('div');
+    card.className = 'book-card';
+    card.innerHTML = `<div class="book-spine" style="background:${statusColor(b.status)}"></div>
+      <div style="flex:1">
+        <div class="book-title">${b.title}</div>
+        ${b.author?`<div class="book-author">${b.author}</div>`:''}
+        <div><span class="status-pill" style="background:${statusColor(b.status)}22; color:${statusColor(b.status)}">${b.status}</span></div>
+        <div class="book-progress">
+          <input type="range" min="0" max="100" value="${b.progress||0}" data-id="${b.id}">
+          <div class="book-pct mono">${b.progress||0}%</div>
+        </div>
+      </div>`;
+    const range = card.querySelector('input[type=range]');
+    range.oninput = ()=>{ card.querySelector('.book-pct').textContent = range.value+'%'; };
+    range.onchange = async ()=>{
+      b.progress = parseInt(range.value);
+      if(b.progress>=100) b.status='completed';
+      await safeSet('reading:books', books);
+      renderBooks(); await renderLogbook(); await renderRank();
+    };
+    wrap.appendChild(card);
+  });
+}
+function renderBookSuggestions(){
+  const wrap = document.getElementById('bookSuggestChips');
+  wrap.innerHTML = '';
+  BOOK_SUGGESTIONS.forEach(s=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip'; chip.textContent = s;
+    chip.onclick = async ()=>{
+      const [title,author] = s.split(' — ');
+      books.push({id:uid(), title, author, status:'someday', progress:0});
+      await safeSet('reading:books', books);
+      renderBooks();
+    };
+    wrap.appendChild(chip);
+  });
+}
+async function addBook(){
+  const title = document.getElementById('newBookTitle').value.trim();
+  const author = document.getElementById('newBookAuthor').value.trim();
+  const status = document.getElementById('newBookStatus').value;
+  if(!title) return;
+  books.push({id:uid(), title, author, status, progress:0});
+  await safeSet('reading:books', books);
+  document.getElementById('newBookTitle').value=''; document.getElementById('newBookAuthor').value='';
+  renderBooks(); await renderLogbook();
+}
+
+/* ===================== ACHIEVEMENTS + RESUME ===================== */
+function renderAchievements(){
+  const logged = document.getElementById('achLoggedList');
+  const upcoming = document.getElementById('achUpcomingList');
+  logged.innerHTML=''; upcoming.innerHTML='';
+  achievements.forEach(a=>{
+    const card = document.createElement('div');
+    card.className = 'ach-card';
+    card.style.borderLeftColor = a.status==='completed'?'var(--green)':a.status==='in-progress'?'var(--amber)':'var(--muted)';
+    card.innerHTML = `<div class="ach-top"><div><div class="ach-title">${a.title}</div><div class="ach-cat">${a.category} · ${a.status}</div></div><button class="ach-del">✕</button></div>${a.note?`<div class="ach-note">${a.note}</div>`:''}`;
+    card.querySelector('.ach-del').onclick = async ()=>{
+      achievements = achievements.filter(x=>x.id!==a.id);
+      await safeSet('achievements', achievements);
+      renderAchievements(); await renderLogbook();
+    };
+    if(a.status==='upcoming') upcoming.appendChild(card); else logged.appendChild(card);
+  });
+}
+async function addAchievement(){
+  const title = document.getElementById('newAchTitle').value.trim();
+  const note = document.getElementById('newAchNote').value.trim();
+  const category = document.getElementById('newAchCat').value;
+  const status = document.getElementById('newAchStatus').value;
+  if(!title) return;
+  achievements.push({id:uid(), title, note, category, status});
+  await safeSet('achievements', achievements);
+  document.getElementById('newAchTitle').value=''; document.getElementById('newAchNote').value='';
+  renderAchievements(); await renderLogbook();
+}
+function renderResumeVersions(){
+  const wrap = document.getElementById('resumeList');
+  wrap.innerHTML = '';
+  resumeVersions.slice().reverse().forEach(v=>{
+    const card = document.createElement('div');
+    card.className = 'ach-card';
+    card.style.borderLeftColor = v.status==='current'?'var(--green)':v.status==='draft'?'var(--amber)':'var(--muted)';
+    card.innerHTML = `<div class="ach-top"><div><div class="ach-title">${v.label}</div><div class="ach-cat">${v.status} · ${new Date(v.date).toLocaleDateString()}</div></div><button class="ach-del">✕</button></div>${v.note?`<div class="ach-note">${v.note}</div>`:''}`;
+    card.querySelector('.ach-del').onclick = async ()=>{
+      resumeVersions = resumeVersions.filter(x=>x.id!==v.id);
+      await safeSet('resume:versions', resumeVersions);
+      renderResumeVersions();
+    };
+    wrap.appendChild(card);
+  });
+}
+async function addResumeVersion(){
+  const label = document.getElementById('newResumeLabel').value.trim();
+  const note = document.getElementById('newResumeNote').value.trim();
+  const status = document.getElementById('newResumeStatus').value;
+  if(!label) return;
+  resumeVersions.push({id:uid(), label, note, status, date:Date.now()});
+  await safeSet('resume:versions', resumeVersions);
+  document.getElementById('newResumeLabel').value=''; document.getElementById('newResumeNote').value='';
+  renderResumeVersions();
+}
+
+/* ===================== LOGBOOK ===================== */
+async function renderLogbook(){
+  let acadDone=0, acadTotal=0;
+  Object.keys(ACADEMICS).forEach(k=>{
+    const total = ACADEMICS[k].units.reduce((s,u)=>s+u.ch.length,0);
+    const state = academics[k] || new Array(total).fill(false);
+    acadTotal += total; acadDone += state.filter(Boolean).length;
+  });
+  document.getElementById('statAcad').textContent = acadTotal? Math.round((acadDone/acadTotal)*100)+'%' : '0%';
+
+  let dgcaDone=0, dgcaTotal=0;
+  Object.keys(DGCA).forEach(k=>{
+    const total = DGCA[k].units.reduce((s,u)=>s+u.ch.length,0);
+    const state = dgcaState[k] || new Array(total).fill(false);
+    dgcaTotal += total; dgcaDone += state.filter(Boolean).length;
+  });
+  document.getElementById('statDgca').textContent = dgcaTotal? Math.round((dgcaDone/dgcaTotal)*100)+'%' : '0%';
+
+  let seDone=0, seTotal=0;
+  ['aero','space','robo'].forEach(track=>{
+    CURRICULUM[track].levels.forEach((level,li)=>{
+      const state = curriculumProgress[track]['L'+li] || level.tasks.map(()=>false);
+      seTotal += level.tasks.length; seDone += state.filter(Boolean).length;
+    });
+  });
+  caseList.forEach(p=>{ seTotal+=4; seDone+=p.steps.filter(Boolean).length; });
+  document.getElementById('statSelfEd').textContent = seTotal? Math.round((seDone/seTotal)*100)+'%' : '0%';
+
+  document.getElementById('statBooks').textContent = books.filter(b=>b.status==='completed').length;
+  document.getElementById('statAch').textContent = achievements.length;
+
+  const chart = document.getElementById('weekChart');
+  chart.innerHTML = '';
+  const now = new Date();
+  for(let i=6;i>=0;i--){
+    const d = new Date(now); d.setDate(now.getDate()-i);
+    const data = await safeGet('day:'+todayKey(d));
+    const total = blocks.length;
+    const pct = data ? Math.round((data.checked.length/total)*100) : 0;
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    col.innerHTML = `<div class="bar" style="height:${Math.max(pct,2)}%; background:${i===0?'var(--amber)':'var(--cyan)'}"></div><div class="bar-day">${d.toLocaleDateString(undefined,{weekday:'narrow'})}</div>`;
+    chart.appendChild(col);
+  }
+  renderBadges();
+}
+
+async function renderStreak(){
+  let streak=0;
+  const now = new Date();
+  const total = blocks.length;
+  let d = new Date(now);
+  let data = await safeGet('day:'+todayKey(d));
+  if(data && data.checked.length===total) streak++;
+  for(let i=1;i<365;i++){
+    d = new Date(now); d.setDate(now.getDate()-i);
+    data = await safeGet('day:'+todayKey(d));
+    if(data && data.checked.length===total) streak++; else break;
+  }
+  document.getElementById('streakNum').textContent = streak;
+  document.getElementById('statStreak').textContent = streak;
+}
+
+function badgeState(){
+  const streak = parseInt(document.getElementById('streakNum').textContent)||0;
+  const aeroL1 = (curriculumProgress.aero['L0']||[]).some(Boolean);
+  const aeroL2 = (curriculumProgress.aero['L1']||[]).every(Boolean) && (curriculumProgress.aero['L1']||[]).length>0;
+  const spaceL1 = (curriculumProgress.space['L0']||[]).some(Boolean);
+  const roboL1 = (curriculumProgress.robo['L0']||[]).some(Boolean);
+  const booksDone = books.filter(b=>b.status==='completed').length;
+  const caseDone = caseList.filter(p=>p.steps.every(Boolean)).length;
+  const dgcaAny = Object.values(dgcaState).some(arr=>(arr||[]).some(Boolean));
+  const achCount = achievements.length;
+  return {streak, aeroL1, aeroL2, spaceL1, roboL1, booksDone, caseDone, dgcaAny, achCount};
+}
+function renderBadges(){
+  const s = badgeState();
+  const grid = document.getElementById('badgeGrid');
+  grid.innerHTML = '';
+  BADGES.forEach(b=>{
+    const unlocked = b.check(s);
+    const tile = document.createElement('div');
+    tile.className = 'badge-tile'+(unlocked?' unlocked':'');
+    tile.innerHTML = `<div class="badge-emoji">${b.emoji}</div><div class="badge-name">${b.name}</div>`;
+    grid.appendChild(tile);
+  });
+}
+
+async function renderRank(){
+  let xp = 0;
+  Object.keys(ACADEMICS).forEach(k=>{ const state=academics[k]||[]; xp += state.filter(Boolean).length*5; });
+  Object.keys(DGCA).forEach(k=>{ const state=dgcaState[k]||[]; xp += state.filter(Boolean).length*5; });
+  Object.values(satTopics).forEach(arr=>{ xp += (arr||[]).filter(Boolean).length*5; });
+  ['aero','space','robo'].forEach(track=>{
+    CURRICULUM[track].levels.forEach((level,li)=>{
+      const state = curriculumProgress[track]['L'+li] || [];
+      xp += state.filter(Boolean).length*10;
+    });
+  });
+  caseList.forEach(p=>{ xp += p.steps.filter(Boolean).length*10; });
+  books.forEach(b=>{ xp += b.status==='completed'?30:Math.round((b.progress||0)/10); });
+  achievements.forEach(a=>{ xp += a.status==='completed'?25:a.status==='in-progress'?10:3; });
+  const streak = parseInt(document.getElementById('streakNum').textContent)||0;
+  xp += streak*8;
+  const challengeDone = await safeGet('challenge:'+todayKey());
+  if(challengeDone && challengeDone.done) xp += 5;
+
+  let rank = 'Cadet';
+  if(xp>=900) rank='Commander';
+  else if(xp>=500) rank='Squadron Leader';
+  else if(xp>=250) rank='Ace';
+  else if(xp>=90) rank='Wingman';
+  document.getElementById('rankName').textContent = rank;
+}
+
+init();
+</script>
+  <script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  // Restore saved values
+  document.querySelectorAll("input, textarea, select").forEach(el => {
+    if (!el.id) return;
+
+    const saved = localStorage.getItem(el.id);
+    if (saved === null) return;
+
+    if (el.type === "checkbox") {
+      el.checked = saved === "true";
+    } else {
+      el.value = saved;
+    }
+  });
+
+  // Save whenever something changes
+  document.querySelectorAll("input, textarea, select").forEach(el => {
+    if (!el.id) return;
+
+    const save = () => {
+      if (el.type === "checkbox") {
+        localStorage.setItem(el.id, el.checked);
+      } else {
+        localStorage.setItem(el.id, el.value);
+      }
+    };
+
+    el.addEventListener("input", save);
+    el.addEventListener("change", save);
+  });
+
+});
+</script>
+
+<div class="modal-backdrop" id="portalBackdrop">
+  <div class="portal" role="dialog" aria-modal="true" aria-labelledby="portalTitle">
+    <div class="portal-head"><div class="portal-title" id="portalTitle">Mission Control · Edit Portal</div><button class="portal-close" id="closePortal">×</button></div>
+    <div class="portal-note">Changes made here are saved in this browser using local storage. Your existing checklist progress, books, achievements and logbook stay intact.</div>
+    <div class="portal-section">
+      <h3>Daily Flight Plan</h3>
+      <div id="portalBlocks"></div>
+      <button class="portal-btn" id="addBlockBtn">+ Add Routine Block</button>
+    </div>
+    <div class="portal-section">
+      <h3>Daily Briefing</h3>
+      <div class="portal-grid">
+        <div class="portal-field full"><label>Quotes — one per line</label><textarea id="portalQuotes"></textarea></div>
+        <div class="portal-field full"><label>Challenges — one per line</label><textarea id="portalChallenges"></textarea></div>
+      </div>
+    </div>
+    <div class="portal-section">
+      <h3>Quick Settings</h3>
+      <div class="portal-grid">
+        <div class="portal-field"><label>Callsigh / Header</label><input id="portalCallsign" type="text"></div>
+        <div class="portal-field"><label>Study Page Label</label><input id="portalStudyTitle" type="text"></div>
+      </div>
+    </div>
+    <div class="portal-actions">
+      <button class="portal-btn" id="savePortal">Save Changes</button>
+      <button class="portal-btn secondary" id="resetCustomBtn">Restore Default Routine</button>
+    </div>
+    <div class="portal-status" id="portalStatus"></div>
+  </div>
+</div>
+</body>
+</html>
